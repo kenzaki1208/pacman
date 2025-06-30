@@ -8,3 +8,14 @@ body {
 #board {
     background-color: black;
 }
+
+.board-container {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+button {
+    align-self: flex-start;
+}

@@ -18,6 +18,9 @@ let pacmanLeftImage;
 let pacmanRightImage;
 let wallImage;
 
+let ghostsEatenInPowerMode = 0;
+
+
 //X = wall, O = skip, P = pac man, ' ' = food
 //Ghosts: b = blue, o = orange, p = pink, r = red
 const tileMap = [
@@ -47,12 +50,16 @@ const tileMap = [
 const walls = new Set();
 const foods = new Set();
 const ghosts = new Set();
+const powerFoods = new Set();
 let pacman;
 
 const direction = ['U', 'D', 'L', 'R'];
 let score = 0;
 let lives = 3;
 let gameOver = false;
+let isGameStarted = false;
+let powerMode = false;
+let powerModeTimer = 0;
 
 window.onload = function () {
     board = document.getElementById("board");
@@ -61,26 +68,80 @@ window.onload = function () {
     context = board.getContext("2d");
 
     loadImages();
-    loadMap();
-    // console.log(walls.size)
-    // console.log(foods.size)
-    // console.log(ghosts.size)
+    // loadMap();
+
     for (let ghost of ghosts.values()) {
         const newDirection = direction[Math.floor(Math.random() * 4)];
         ghost.updateDirection(newDirection);
     }
+
+    const startBtn = document.getElementById("startBtn");
+    startBtn.addEventListener("click", startGame);
+
     update();
     document.addEventListener("keyup", movePacman)
+
+    drawStartScreen();
 }
 
 function update() {
-    if (gameOver) {
+    if (!isGameStarted || gameOver) {
         return;
     }
     //move
     move();
     draw();
-    setTimeout(update, 50);
+
+    if (!gameOver) {
+        setTimeout(update, 50);
+    } else {
+        isGameStarted = false;
+        document.getElementById("startBtn").style.display = "block";
+        drawGameOverScreen();
+    }
+}
+
+function startGame() {
+    document.getElementById("startBtn").style.display = "none";
+
+    loadMap();
+    resetPosition();
+
+    lives = 3;
+    score = 0;
+    gameOver = false;
+    isGameStarted = true;
+    powerMode = false;
+    powerModeTimer = 0;
+    ghostsEatenInPowerMode = 0;
+
+    document.addEventListener("keyup", movePacman);
+
+    update();
+}
+
+function drawStartScreen() {
+    context.fillStyle = "black";
+    context.fillRect(0, 0, boardWidth, boardHeight);
+
+    context.fillStyle = "yellow";
+    context.font = "28px sans-serif";
+    context.fillText("PACMAN", boardWidth / 2 - 70, boardHeight / 2 - 40);
+    context.font = "20px sans-serif";
+    context.fillText("Nhấn nút 'Bắt đầu Game' để chơi", boardWidth / 2 - 120, boardHeight / 2);
+}
+
+function drawGameOverScreen() {
+    context.fillStyle = "rgba(0, 0, 0, 0.8)";
+    context.fillRect(0, 0, boardWidth, boardHeight);
+
+    context.fillStyle = "red";
+    context.font = "32px sans-serif";
+    context.fillText("GAME OVER", boardWidth / 2 - 90, boardHeight / 2 - 20);
+
+    context.fillStyle = "white";
+    context.font = "20px sans-serif";
+    context.fillText("Nhấn nút 'Bắt đầu Game' để chơi lại", boardWidth / 2 - 140, boardHeight / 2 + 20);
 }
 
 function draw() {
@@ -103,96 +164,128 @@ function draw() {
     context.fillStyle = "white";
     context.font = "14px sans-serif";
     if (gameOver) {
-        context.fillStyle = "rgba(0, 0, 0, 0.8)";
-        context.fillRect(0, 0, boardWidth, boardHeight);
-        context.fillStyle = "white";
-        context.font = "20px sans-serif";
-        if (foods.size == 0) {
-            context.fillText("You Win! Press any key to restart", boardWidth / 4, boardHeight / 2);
-        } else {
-            context.fillText("Game Over", boardWidth / 4, boardHeight / 2);
-            context.fillText("Score: " + String(score), boardWidth / 4, boardHeight / 2 + 30);
-            context.fillText("Press any key to restart", boardWidth / 4, boardHeight / 2 + 60);
-        }
+        context.fillText("Game Over: " + String(score), titleSize/2, titleSize/2);
+    } else {
+        context.fillText("x" + String(lives) + " " + String(score), titleSize/2, titleSize/2);
+    }
+
+    context.fillStyle = "purple";
+    for (let power of powerFoods.values()) {
+        context.beginPath();
+        context.arc(power.x + power.width/2, power.y + power.height/2, 6, 0, Math.PI * 2);
+        context.fill();
     }
 }
 
 function movePacman(e) {
-    if (gameOver) {
-        loadMap();
-        resetPosition();
-        lives = 3;
-        score = 0;
-        gameOver = false;
-        update();
-        return;
-    }
+    if (gameOver) return;
+
     if (e.code == 'ArrowUp' || e.code == 'KeyW') {
-        pacman.updateDirection('U');
+        pacman.pendingDirection = 'U';
     }
     else if (e.code == 'ArrowDown' || e.code == 'KeyS') {
-        pacman.updateDirection('D');
+        pacman.pendingDirection = 'D';
     }
     else if (e.code == 'ArrowLeft' || e.code == 'KeyA') {
-        pacman.updateDirection('L');
+        pacman.pendingDirection = 'L';
     }
     else if (e.code == 'ArrowRight' || e.code == 'KeyD') {
-        pacman.updateDirection('R');
-    }
-
-    if (pacman.direction == 'U') {
-        pacman.image = pacmanUpImage;
-    }
-    else if (pacman.direction == 'D') {
-        pacman.image = pacmanDownImage;
-    }
-    else if (pacman.direction == 'L') {
-        pacman.image = pacmanLeftImage;
-    }
-    else if (pacman.direction == 'R') {
-        pacman.image = pacmanRightImage;
+        pacman.pendingDirection = 'R';
     }
 }
 
+
 function move() {
+    // Nếu có hướng chờ (pending) và có thể rẽ được, thì rẽ
+    if (pacman.pendingDirection && pacman.canMove(pacman.pendingDirection)) {
+        pacman.updateDirection(pacman.pendingDirection);
+        pacman.pendingDirection = null;
+
+        if (pacman.direction == 'U') pacman.image = pacmanUpImage;
+        else if (pacman.direction == 'D') pacman.image = pacmanDownImage;
+        else if (pacman.direction == 'L') pacman.image = pacmanLeftImage;
+        else if (pacman.direction == 'R') pacman.image = pacmanRightImage;
+    }
+
     pacman.x += pacman.velocityX;
     pacman.y += pacman.velocityY;
 
     for (let wall of walls.values()) {
-        if(collision(pacman, wall)) {
+        if (collision(pacman, wall)) {
             pacman.x -= pacman.velocityX;
             pacman.y -= pacman.velocityY;
             break;
         }
     }
 
-    for (let ghost of ghosts.values()) {
+    for (let ghost of ghosts) {
         if (collision(ghost, pacman)) {
-            lives -= 1;
-            if (lives == 0) {
-                gameOver = true;
+            if (powerMode && !ghost.isEaten) {
+                ghostsEatenInPowerMode++;
+                ghost.isEaten = true;
+                ghost.respawnTimer = 100;
+                ghost.x = -1000;
+                ghost.y = -1000;
+                score += 100 * Math.pow(2, ghostsEatenInPowerMode - 1);
+                continue;
+            } else if (!ghost.isEaten) {
+                lives -= 1;
+                if (lives == 0) {
+                    gameOver = true;
+                    return;
+                }
+                resetPosition();
                 return;
             }
-            resetPosition();
         }
 
-        if (ghost.y == titleSize*9 && ghost.direction != 'U' && ghost.direction != 'D') {
-            ghost.updateDirection('U');
+        if (ghost.x % titleSize === 0 && ghost.y % titleSize === 0) {
+            // Tập hợp các hướng khả dĩ
+            const options = [];
+            for (let d of direction) {
+                if (d === opposite(ghost.direction)) continue;
+                // tạm thử di chuyển hướng đó
+                if (ghost.canMove(d)) {
+                    options.push(d);
+                }
+            }
+            if (options.length === 0) {
+                options.push(opposite(ghost.direction));
+            }
+            const choice = options[Math.floor(Math.random() * options.length)];
+            ghost.updateDirection(choice);
         }
+
 
         ghost.x += ghost.velocityX;
         ghost.y += ghost.velocityY;
+
         for (let wall of walls.values()) {
-            if(collision(ghost, wall) || ghost.x <= 0 || ghost.x + ghost.width >= boardWidth) {
+            if (collision(ghost, wall) || ghost.x <= 0 || ghost.x + ghost.width >= boardWidth) {
                 ghost.x -= ghost.velocityX;
                 ghost.y -= ghost.velocityY;
+                const back = opposite(ghost.direction);
+                ghost.updateDirection(back);
+                break;
+            }
+        }
+
+        if (lives === 0) {
+            document.getElementById("startBtn").style.display = "block";
+        }
+
+        if (ghost.isEaten) {
+            ghost.respawnTimer--;
+            if (ghost.respawnTimer <= 0) {
+                ghost.reset();
                 const newDirection = direction[Math.floor(Math.random() * 4)];
                 ghost.updateDirection(newDirection);
+                ghost.isEaten = false;
             }
         }
     }
 
-    //check food collision
+    // Ăn food
     let foodEaten = null;
     for (let food of foods.values()) {
         if (collision(pacman, food)) {
@@ -207,6 +300,36 @@ function move() {
         loadMap();
         resetPosition();
     }
+
+    // Ăn power pellet
+    let powerEaten = null;
+    for (let power of powerFoods.values()) {
+        if (collision(pacman, power)) {
+            powerEaten = power;
+            powerMode = true;
+            powerModeTimer = 100;
+            ghostsEatenInPowerMode = 0;
+            break;
+        }
+    }
+    powerFoods.delete(powerEaten);
+
+    if (powerMode) {
+        powerModeTimer -= 1;
+        if (powerModeTimer <= 0) {
+            powerMode = false;
+        }
+    }
+    if (!powerMode && ghostsEatenInPowerMode > 0) {
+        ghostsEatenInPowerMode = 0;
+    }
+}
+
+function opposite(dir) {
+    if (dir === 'U') return 'D';
+    if (dir === 'D') return 'U';
+    if (dir === 'L') return 'R';
+    if (dir === 'R') return 'L';
 }
 
 function collision(a, b) {
@@ -245,6 +368,9 @@ function loadMap() {
     walls.clear();
     foods.clear();
     ghosts.clear();
+    powerFoods.clear();
+
+    const emptyTiles = [];
 
     for (let i = 0; i < rowCount; i++) {
         for (let j = 0; j < columnCount; j++) {
@@ -254,41 +380,52 @@ function loadMap() {
             const x = j * titleSize;
             const y = i * titleSize;
 
-            //block wall
-            if (titleMapChar == 'X') {
+            if (titleMapChar === 'X') {
                 const wall = new Block(wallImage, x, y, titleSize, titleSize);
                 walls.add(wall);
             }
-            //blue ghost
-            else if (titleMapChar == 'b') {
+            else if (titleMapChar === 'b') {
                 const ghost = new Block(blueGhostImage, x, y, titleSize, titleSize);
                 ghosts.add(ghost);
             }
-            //orange ghost
-            else if (titleMapChar == 'o') {
+            else if (titleMapChar === 'o') {
                 const ghost = new Block(orangeGhostImage, x, y, titleSize, titleSize);
                 ghosts.add(ghost);
             }
-            //pink ghost
-            else if (titleMapChar == 'p') {
+            else if (titleMapChar === 'p') {
                 const ghost = new Block(pinkGhostImage, x, y, titleSize, titleSize);
                 ghosts.add(ghost);
             }
-            //red ghost
-            else if (titleMapChar == 'r') {
+            else if (titleMapChar === 'r') {
                 const ghost = new Block(redGhostImage, x, y, titleSize, titleSize);
                 ghosts.add(ghost);
             }
-            else if (titleMapChar == 'P') { //pacman
+            else if (titleMapChar === 'P') {
                 pacman = new Block(pacmanRightImage, x, y, titleSize, titleSize);
             }
-            else if (titleMapChar == ' ') { //empty is food
-                const food = new Block(null, x + 14, y + 14, 4, 4);
-                foods.add(food);
+            else if (titleMapChar === ' ') {
+                emptyTiles.push({ x: x, y: y });
             }
         }
     }
+
+    const shuffled = emptyTiles.sort(() => Math.random() - 0.5);
+    const powerCount = 4; // số lượng power pellet
+    const selectedPower = shuffled.slice(0, powerCount);
+
+    for (let pos of selectedPower) {
+        const pellet = new Block(null, pos.x + 10, pos.y + 10, 12, 12);
+        powerFoods.add(pellet);
+    }
+
+    for (let pos of emptyTiles) {
+        if (!selectedPower.includes(pos)) {
+            const food = new Block(null, pos.x + 14, pos.y + 14, 4, 4);
+            foods.add(food);
+        }
+    }
 }
+
 
 function resetPosition() {
     pacman.reset();
@@ -315,6 +452,12 @@ class Block {
         this.direction = 'R';
         this.velocityX = 0;
         this.velocityY = 0;
+
+        this.pendingDirection = null;
+        this.moveCounter = 0;
+
+        this.isEaten = false;
+        this.respawnTimer = 0;
     }
 
     updateDirection(direction) {
@@ -323,7 +466,6 @@ class Block {
         this.updateVelocity();
         this.x += this.velocityX;
         this.y += this.velocityY;
-
         for (let wall of walls.values()) {
             if (collision(this, wall)) {
                 this.x -= this.velocityX;
@@ -333,23 +475,25 @@ class Block {
                 return;
             }
         }
+        this.x -= this.velocityX;
+        this.y -= this.velocityY;
     }
 
     updateVelocity() {
         if (this.direction == 'U') {
             this.velocityX = 0;
-            this.velocityY = -titleSize/4;
+            this.velocityY = -titleSize / 4;
         }
         else if (this.direction == 'D') {
             this.velocityX = 0;
-            this.velocityY = titleSize/4;
+            this.velocityY = titleSize / 4;
         }
         else if (this.direction == 'L') {
-            this.velocityX = -titleSize/4;
+            this.velocityX = -titleSize / 4;
             this.velocityY = 0;
         }
         else if (this.direction == 'R') {
-            this.velocityX = titleSize/4;
+            this.velocityX = titleSize / 4;
             this.velocityY = 0;
         }
     }
@@ -357,5 +501,36 @@ class Block {
     reset() {
         this.x = this.startX;
         this.y = this.startY;
+    }
+
+    canMove(direction) {
+        const oldX = this.x;
+        const oldY = this.y;
+        const oldDirection = this.direction;
+        const oldVX = this.velocityX;
+        const oldVY = this.velocityY;
+
+        this.direction = direction;
+        this.updateVelocity();
+        this.x += this.velocityX;
+        this.y += this.velocityY;
+
+        for (let wall of walls.values()) {
+            if (collision(this, wall)) {
+                this.x = oldX;
+                this.y = oldY;
+                this.direction = oldDirection;
+                this.velocityX = oldVX;
+                this.velocityY = oldVY;
+                return false;
+            }
+        }
+
+        this.x = oldX;
+        this.y = oldY;
+        this.direction = oldDirection;
+        this.velocityX = oldVX;
+        this.velocityY = oldVY;
+        return true;
     }
 }
