@@ -103,9 +103,17 @@ function draw() {
     context.fillStyle = "white";
     context.font = "14px sans-serif";
     if (gameOver) {
-        context.fillText("Game Over: " + String(score), titleSize/2, titleSize/2);
-    } else {
-        context.fillText("x" + String(lives) + " " + String(score), titleSize/2, titleSize/2);
+        context.fillStyle = "rgba(0, 0, 0, 0.8)";
+        context.fillRect(0, 0, boardWidth, boardHeight);
+        context.fillStyle = "white";
+        context.font = "20px sans-serif";
+        if (foods.size == 0) {
+            context.fillText("You Win! Press any key to restart", boardWidth / 4, boardHeight / 2);
+        } else {
+            context.fillText("Game Over", boardWidth / 4, boardHeight / 2);
+            context.fillText("Score: " + String(score), boardWidth / 4, boardHeight / 2 + 30);
+            context.fillText("Press any key to restart", boardWidth / 4, boardHeight / 2 + 60);
+        }
     }
 }
 
