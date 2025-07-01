@@ -18,4 +18,12 @@ body {
 
 button {
     align-self: flex-start;
+    padding: 10px;
+    background-color: #01f801;
+    color: white;
+    border: none;
+}
+
+button:hover {
+    background-color: #00c800;
 }
