@@ -146,34 +146,59 @@ function drawGameOverScreen() {
 
 function draw() {
     context.clearRect(0, 0, boardWidth, boardHeight);
+
     context.drawImage(pacman.image, pacman.x, pacman.y, pacman.width, pacman.height);
+
     for (let ghost of ghosts.values()) {
-        context.drawImage(ghost.image, ghost.x, ghost.y, ghost.width, ghost.height);
+        if (powerMode && !ghost.isEaten) {
+            context.fillStyle = "blue";
+            context.fillRect(ghost.x, ghost.y, ghost.width, ghost.height);
+        } else if (ghost.isEaten) {
+            context.fillStyle = "gray";
+            context.fillRect(ghost.x, ghost.y, ghost.width, ghost.height);
+        } else {
+            context.drawImage(ghost.image, ghost.x, ghost.y, ghost.width, ghost.height);
+        }
     }
 
     for (let wall of walls.values()) {
         context.drawImage(wall.image, wall.x, wall.y, wall.width, wall.height);
     }
-    context.fillStyle = "white";
 
     for (let food of foods.values()) {
-        context.fillRect(food.x, food.y, food.width, food.height);
-    }
-
-    //score
-    context.fillStyle = "white";
-    context.font = "14px sans-serif";
-    if (gameOver) {
-        context.fillText("Game Over: " + String(score), titleSize/2, titleSize/2);
-    } else {
-        context.fillText("x" + String(lives) + " " + String(score), titleSize/2, titleSize/2);
+        if (food.isAnimating) {
+            context.fillStyle = "yellow";
+            const size = 4 + (6 - food.animationFrame);
+            context.fillRect(food.x - size / 2, food.y - size / 2, size, size);
+            food.animationFrame--;
+            if (food.animationFrame <= 0) {
+                food.isAnimating = false;
+            }
+        } else {
+            context.fillStyle = "white";
+            context.fillRect(food.x, food.y, food.width, food.height);
+        }
     }
 
     context.fillStyle = "purple";
     for (let power of powerFoods.values()) {
         context.beginPath();
-        context.arc(power.x + power.width/2, power.y + power.height/2, 6, 0, Math.PI * 2);
+        context.arc(power.x + power.width / 2, power.y + power.height / 2, 6, 0, Math.PI * 2);
         context.fill();
+    }
+
+    context.fillStyle = "white";
+    context.font = "14px sans-serif";
+    if (gameOver) {
+        context.fillText("Game Over: " + String(score), titleSize / 2, titleSize / 2);
+    } else {
+        context.fillText("x" + String(lives) + " " + String(score), titleSize / 2, titleSize / 2);
+    }
+
+    if (powerMode) {
+        context.fillStyle = "cyan";
+        context.font = "14px sans-serif";
+        context.fillText("Power: " + powerModeTimer, boardWidth - 100, titleSize / 2);
     }
 }
 
@@ -290,6 +315,8 @@ function move() {
     for (let food of foods.values()) {
         if (collision(pacman, food)) {
             foodEaten = food;
+            food.isAnimating = true;
+            food.animationFrame = 5;
             score += 10;
             break;
         }
@@ -458,6 +485,9 @@ class Block {
 
         this.isEaten = false;
         this.respawnTimer = 0;
+
+        this.isAnimating = false;
+        this.animationFrame = 0;
     }
 
     updateDirection(direction) {
